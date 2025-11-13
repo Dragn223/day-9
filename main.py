@@ -1,36 +1,40 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-app = FastAPI(title="Book CRUD Operations API")
-data = []
-class Book(BaseModel):
-   id: int
-   title: str
-   author: str
-   publisher: str
-
-@app.post("/book")
-def add_book(book: Book):
-   data.append(book.model_dump())
-   return data
-
-@app.get("/list")
-def get_books():
-   return data
-
-@app.get("/book/{id}")
-def get_book(id: int):
-   id = id - 1
-   return data[id]
-
-@app.put("/book/{id}")
-def modify_book(id: int, book: Book):
-   data[id-1] = book
-   return data
-
-@app.delete("/book/{id}")
-def delete_book(id: int):
-   data.pop(id-1)
-   return data
-
-# To run the app, use the command: 
-# uvicorn main:app --reload
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
+from fastapi import HTTPException
+import schemas
+import services
+from db import get_db
+ 
+app = FastAPI()
+ 
+ 
+ 
+@app.get("/books/", response_model=list[schemas.Book])
+def get_all_books(db: Session = Depends(get_db)):
+    return services.get_books(db)
+ 
+@app.get("/books/{book_id}", response_model=schemas.Book)
+def get_book_by_id(book_id: int, db: Session = Depends(get_db)):
+    book_query_set = services.get_book(db, book_id)   
+    if book_query_set:
+        return book_query_set
+    raise HTTPException(status_code=404, detail="Book not found")
+    
+ 
+@app.post("/books/", response_model=schemas.Book)
+def create_new_book(book: schemas.BookCreate, db: Session = Depends(get_db)):
+    return services.create_book(db, book)
+ 
+@app.put("/books/{book_id}", response_model=schemas.Book)
+def update_book_by_id(book_id: int, book: schemas.BookCreate, db: Session = Depends(get_db)):
+    updated_book = services.update_book(db, book, book_id)
+    if updated_book:
+        return updated_book
+    raise HTTPException(status_code=404, detail="Book not found, hence no update performed")
+ 
+@app.delete("/books/{book_id}", response_model=schemas.Book)
+def delete_book_by_id(book_id: int, db: Session = Depends(get_db)):
+    deleted_book = services.delete_book(db, book_id)
+    if deleted_book:
+        return deleted_book
+    raise HTTPException(status_code=404, detail="Book not found, hence no deletion performed")
